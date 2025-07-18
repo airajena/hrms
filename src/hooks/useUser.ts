@@ -1,9 +1,9 @@
-// src/hooks/useUser.ts
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { userApi } from '../services/userApi';
-import { User, CreateUserRequest, UpdateUserRequest } from '../types';
+import { CreateUserRequest, UpdateUserRequest, User } from '../types';
 import { toast } from './use-toast';
 
+// Consistent query keys for caching user data
 export const userKeys = {
   all: ['users'] as const,
   lists: () => [...userKeys.all, 'list'] as const,
@@ -13,8 +13,8 @@ export const userKeys = {
 };
 
 /**
- * Hook to fetch a list of users with filters.
- * Aligned with GET /users endpoint.
+ * Fetches a list of users based on filter parameters.
+ * This is used by EmployeeList.tsx.
  */
 export const useUsers = (params: {
   search?: string;
@@ -22,45 +22,43 @@ export const useUsers = (params: {
   department_id?: string[];
   type_code?: string[];
 } = {}) => {
-  // The query expects to receive a direct array of User objects, matching the API contract.
-  return useQuery<User[], Error>({
+  return useQuery({
     queryKey: userKeys.list(params),
     queryFn: () => userApi.getUsers(params),
-    staleTime: 1000 * 60 * 5, // 5 minutes
+    staleTime: 5 * 60 * 1000, // 5 minutes
   });
 };
 
 /**
- * Hook to fetch a single user by their ID.
- * Aligned with GET /users/<id> endpoint.
+ * Fetches a single user by their ID.
  */
-export const useUser = (id: string) => {
-  return useQuery<User, Error>({
-    queryKey: userKeys.detail(id),
-    queryFn: () => userApi.getUserById(id),
-    enabled: !!id, // Only run query if ID is provided
+export const useUser = (id?: string) => {
+  return useQuery({
+    queryKey: userKeys.detail(id!),
+    queryFn: () => userApi.getUserById(id!),
+    enabled: !!id, // Only run the query if an ID is provided
   });
 };
 
 /**
- * Hook to create a new user.
- * Aligned with POST /users endpoint.
+ * Provides a mutation function for creating a new user.
  */
 export const useCreateUser = () => {
   const queryClient = useQueryClient();
-  return useMutation<User, Error, CreateUserRequest>({
-    mutationFn: userApi.createUser,
+
+  return useMutation({
+    mutationFn: (data: CreateUserRequest) => userApi.createUser(data),
     onSuccess: (newUser) => {
-      // When a user is created, invalidate the list queries to refetch
+      // When creation is successful, refetch the entire list of users
       queryClient.invalidateQueries({ queryKey: userKeys.lists() });
       toast({
-        title: "Success",
-        description: `Employee "${newUser.first_name} ${newUser.last_name}" has been created.`,
+        title: "Employee Created",
+        description: `${newUser.first_name} ${newUser.last_name} has been added.`,
       });
     },
-    onError: (error) => {
+    onError: (error: Error) => {
       toast({
-        title: "Error Creating Employee",
+        title: "Creation Failed",
         description: error.message || "An unexpected error occurred.",
         variant: "destructive",
       });
@@ -69,25 +67,27 @@ export const useCreateUser = () => {
 };
 
 /**
- * Hook to update an existing user.
- * Aligned with PUT /users/<id> endpoint.
+ * Provides a mutation function for updating an existing user.
  */
 export const useUpdateUser = () => {
   const queryClient = useQueryClient();
-  return useMutation<User, Error, { id: string; data: UpdateUserRequest }>({
-    mutationFn: ({ id, data }) => userApi.updateUser(id, data),
+
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: UpdateUserRequest }) =>
+      userApi.updateUser(id, data),
     onSuccess: (updatedUser) => {
-      // Invalidate lists and update the specific user's cache for immediate UI updates
-      queryClient.invalidateQueries({ queryKey: userKeys.lists() });
+      // Optimistically update the user's detail cache
       queryClient.setQueryData(userKeys.detail(updatedUser.id), updatedUser);
+      // Invalidate the list to ensure it's fresh
+      queryClient.invalidateQueries({ queryKey: userKeys.lists() });
       toast({
-        title: "Success",
-        description: `Employee "${updatedUser.first_name} ${updatedUser.last_name}" has been updated.`,
+        title: "Employee Updated",
+        description: `${updatedUser.first_name} ${updatedUser.last_name}'s data has been updated.`,
       });
     },
-    onError: (error) => {
+    onError: (error: Error) => {
       toast({
-        title: "Error Updating Employee",
+        title: "Update Failed",
         description: error.message || "An unexpected error occurred.",
         variant: "destructive",
       });
@@ -96,36 +96,26 @@ export const useUpdateUser = () => {
 };
 
 /**
- * Hook to soft-delete a user.
- * Aligned with DELETE /users/<id> endpoint.
+ * Provides a mutation function for deleting a user.
+ * This is used by EmployeeList.tsx.
  */
 export const useDeleteUser = () => {
   const queryClient = useQueryClient();
-  // The mutation now expects the full response object from the DELETE API
-  return useMutation<{ id: string; is_active: boolean; is_deleted: boolean; message: string }, Error, string>({
-    mutationFn: async (id: string) => {
-      // Call the API and get the response
-      const response = await userApi.deleteUser(id);
-      // You may need to fetch the user or return the deleted info, adjust as needed
-      return {
-        id,
-        is_active: false,
-        is_deleted: true,
-        message: response.message,
-      };
-    },
-    onSuccess: (data, deletedId) => {
-      // Invalidate lists to remove the user and also remove the detailed query from cache
+
+  return useMutation({
+    mutationFn: (id: string) => userApi.deleteUser(id),
+    onSuccess: (_, deletedId) => {
+      // Invalidate the user list to reflect the deletion
       queryClient.invalidateQueries({ queryKey: userKeys.lists() });
-      queryClient.removeQueries({ queryKey: userKeys.detail(deletedId) });
       toast({
         title: "Employee Deleted",
-        description: data.message || "The employee has been successfully removed.",
+        description: "The employee has been successfully removed.",
+        variant: "default",
       });
     },
-    onError: (error) => {
+    onError: (error: Error) => {
       toast({
-        title: "Error Deleting Employee",
+        title: "Deletion Failed",
         description: error.message || "An unexpected error occurred.",
         variant: "destructive",
       });

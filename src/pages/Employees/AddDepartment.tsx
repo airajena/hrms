@@ -23,17 +23,26 @@ const AddDepartment = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!formData.name.trim()) {
+    // --- FIX: Create a clean payload with the trimmed name ---
+    const trimmedName = formData.name.trim();
+
+    if (!trimmedName) {
       toast({
         title: "Validation Error",
-        description: "Department name is required",
+        description: "Department name is required and cannot be empty.",
         variant: "destructive",
       });
       return;
     }
 
+    // Use the cleaned data for the mutation
+    const payload = {
+      ...formData,
+      name: trimmedName,
+    };
+
     try {
-      await createDepartmentMutation.mutateAsync(formData);
+      await createDepartmentMutation.mutateAsync(payload);
       navigate('/departments');
     } catch (error) {
       console.error('Failed to create department:', error);
