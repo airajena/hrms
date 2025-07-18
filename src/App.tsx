@@ -65,11 +65,8 @@ function App() {
               <EmployeeProfile />
             </ProtectedRoute>
           } />
-          <Route path="/employees/:id/edit" element={
-            <ProtectedRoute>
-              <EditEmployee />
-            </ProtectedRoute>
-          } />
+         <Route path="/employees/edit/:id" element={<ProtectedRoute><EditEmployee /></ProtectedRoute>} />
+          
           <Route path="/departments" element={
             <ProtectedRoute>
               <DepartmentList />
