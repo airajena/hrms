@@ -65,8 +65,20 @@ const EditEmployee = () => {
     }
   }, [employee, reset]);
 
+  // --- FIX IS HERE ---
   const onSubmit = (data: UpdateUserRequest) => {
-    updateUserMutation.mutate({ id: id!, data }, {
+    // Create a mutable copy of the form data to clean it up
+    const payload: Partial<UpdateUserRequest> = { ...data };
+
+    // Convert empty strings for optional fields to null, which the backend expects
+    if (payload.dob === '') payload.dob = null;
+    if (payload.probation_end === '') payload.probation_end = null;
+    if (payload.phone === '') payload.phone = null;
+    if (payload.department_id === '') payload.department_id = null;
+    if (payload.designation_id === '') payload.designation_id = null;
+
+    // Submit the cleaned payload
+    updateUserMutation.mutate({ id: id!, data: payload as UpdateUserRequest }, {
       onSuccess: () => navigate('/employees'),
     });
   };
